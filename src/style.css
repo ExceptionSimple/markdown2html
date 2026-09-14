@@ -19,6 +19,15 @@
   background: rgba(148, 163, 184, 0.4);
 }
 
+/* textarea 的滚动条不继承文本光标：textarea 默认 cursor: text，悬停到滚动条上会显示
+   I 形光标，看着像要往那里插入文字；滚动条本质是拖拽控件，给 pointer 更符合直觉。
+   （预览区、主题抽屉的滚动条不受影响，它们本来就是默认箭头。） */
+textarea::-webkit-scrollbar,
+textarea::-webkit-scrollbar-track,
+textarea::-webkit-scrollbar-thumb {
+  cursor: pointer;
+}
+
 /* Base resets */
 html, body {
   width: 100%;
