@@ -776,6 +776,24 @@ export async function renderMarkdown(
           }
         }
 
+        // 列表项里的裸文本包进 span：裸文本承载不了任何 inline style
+        // （juice 只能把样式写进元素），li 自身的样式一旦在微信侧被丢，
+        // 这段文字就完全不设防。空白节点原样保留，避免改变换行行为。
+        if (node.tagName === 'li' && Array.isArray(node.children)) {
+          node.children = node.children.flatMap((child: any) =>
+            child.type === 'text' && child.value.trim()
+              ? [
+                  {
+                    type: 'element',
+                    tagName: 'span',
+                    properties: { className: ['m2h-li-text'] },
+                    children: [child]
+                  }
+                ]
+              : [child]
+          )
+        }
+
         // Convert task list checkboxes to bulletproof unicode symbols for WeChat compatibility
         if (node.tagName === 'input' && node.properties?.type === 'checkbox') {
           const isChecked = Boolean(node.properties.checked)
