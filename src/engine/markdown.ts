@@ -6,9 +6,9 @@ import remarkRehype from 'remark-rehype'
 import rehypeRaw from 'rehype-raw'
 import rehypeStringify from 'rehype-stringify'
 import { visit } from 'unist-util-visit'
-import katex from 'katex'
 import type { ThemeConfig } from '../themes/types'
 import { highlightCode } from './shiki'
+import { renderMathToSvg } from './mathjax'
 import { renderMermaidToPng } from './mermaid'
 
 function escapeHtml(str: string): string {
@@ -47,13 +47,28 @@ function injectLineNumbers(shikiHtml: string, color = 'rgba(148, 163, 184, 0.45)
   })
 }
 
-// In-memory caches for KaTeX math rendering to avoid recalculating unchanged formulas
-const katexInlineCache = new Map<string, string>()
-const katexBlockCache = new Map<string, string>()
+// 公式渲染结果缓存。MathJax 是异步的而下面改 AST 的 visit 是同步的，
+// 所以先并发预渲染把缓存填满，同步 visit 只负责查表。
+const mathInlineCache = new Map<string, string>()
+const mathBlockCache = new Map<string, string>()
 
-export function clearKatexCache() {
-  katexInlineCache.clear()
-  katexBlockCache.clear()
+export function clearMathCache() {
+  mathInlineCache.clear()
+  mathBlockCache.clear()
+}
+
+async function prerenderMath(tex: string, display: boolean, cache: Map<string, string>, limit: number) {
+  if (cache.has(tex)) return
+  try {
+    cache.set(tex, await renderMathToSvg(tex, display))
+  } catch {
+    // 渲染失败就不填缓存，交给同步 visit 里的兜底分支降级成公式源码
+    return
+  }
+  if (cache.size > limit) {
+    const oldest = cache.keys().next().value
+    if (oldest) cache.delete(oldest)
+  }
 }
 
 // Convert numbers to Chinese numerals for chapter prefix
@@ -449,54 +464,38 @@ export async function renderMarkdown(
     })
   }
 
-  // 4. Process KaTeX math nodes (inlineMath & math) with caching
+  // 4. Pre-render math formulas (inlineMath & math)
+  // 先用 Set 去重，重复公式只渲染一次；全部并发跑完再进同步流程
+  const inlineTex = new Set<string>()
+  const blockTex = new Set<string>()
+  visit(mdast, 'inlineMath', (node: any) => {
+    inlineTex.add(node.value)
+  })
+  visit(mdast, 'math', (node: any) => {
+    blockTex.add(node.value)
+  })
+
+  await Promise.all([
+    ...[...inlineTex].map((tex) => prerenderMath(tex, false, mathInlineCache, 2000)),
+    ...[...blockTex].map((tex) => prerenderMath(tex, true, mathBlockCache, 1000))
+  ])
+
   visit(mdast, 'inlineMath', (node: any, index: number | undefined, parent: any) => {
     if (parent && typeof index === 'number') {
-      try {
-        let mathHtml = katexInlineCache.get(node.value)
-        if (!mathHtml) {
-          mathHtml = katex.renderToString(node.value, {
-            displayMode: false,
-            throwOnError: false
-          })
-          if (katexInlineCache.size >= 2000) {
-            const oldest = katexInlineCache.keys().next().value
-            if (oldest) katexInlineCache.delete(oldest)
-          }
-          katexInlineCache.set(node.value, mathHtml)
-        }
-        parent.children[index] = {
-          type: 'html',
-          value: `<span class="katex-inline">${mathHtml}</span>`
-        }
-      } catch (err) {
-        parent.children[index] = { type: 'html', value: `<code>$${escapeHtml(node.value)}$</code>` }
-      }
+      const svg = mathInlineCache.get(node.value)
+      parent.children[index] = svg
+        ? { type: 'html', value: `<span class="m2h-math-inline">${svg}</span>` }
+        : { type: 'html', value: `<code>$${escapeHtml(node.value)}$</code>` }
     }
   })
 
   visit(mdast, 'math', (node: any, index: number | undefined, parent: any) => {
     if (parent && typeof index === 'number') {
-      try {
-        let mathHtml = katexBlockCache.get(node.value)
-        if (!mathHtml) {
-          mathHtml = katex.renderToString(node.value, {
-            displayMode: true,
-            throwOnError: false
-          })
-          if (katexBlockCache.size >= 1000) {
-            const oldest = katexBlockCache.keys().next().value
-            if (oldest) katexBlockCache.delete(oldest)
-          }
-          katexBlockCache.set(node.value, mathHtml)
-        }
-        parent.children[index] = {
-          type: 'html',
-          value: `<div class="katex-block-wrapper" style="overflow-x: auto; text-align: center; margin: 18px 0; padding: 6px 0;">${mathHtml}</div>`
-        }
-      } catch (err) {
-        parent.children[index] = { type: 'html', value: `<pre><code>$$${escapeHtml(node.value)}$$</code></pre>` }
-      }
+      const svg = mathBlockCache.get(node.value)
+      // 容器一律用 section：微信编辑器会整段吞掉 div，连带 background/border-radius
+      parent.children[index] = svg
+        ? { type: 'html', value: `<section class="m2h-math-block" style="text-align: center; margin: 18px 0;">${svg}</section>` }
+        : { type: 'html', value: `<pre><code>$$${escapeHtml(node.value)}$$</code></pre>` }
     }
   })
 
@@ -514,31 +513,33 @@ export async function renderMarkdown(
         // Strip the alert marker from text
         firstP.children[0].value = textVal.substring(alertMatch[0].length)
 
+        // 背景色使用纯色 hex（由 8% 透明度 rgba 合成到白底得出）。
+        // 微信公众号编辑器对 rgba() 背景支持不可靠，会整条丢弃导致卡片"没有样式"。
         let color = alerts.noteColor
         let title = '提示 NOTE'
         let icon = 'ℹ️'
-        let bg = 'rgba(59, 130, 246, 0.08)'
+        let bg = '#eff5fe'
 
         if (alertType === 'TIP') {
           color = alerts.tipColor
           title = '技巧 TIP'
           icon = '💡'
-          bg = 'rgba(16, 185, 129, 0.08)'
+          bg = '#ecf9f5'
         } else if (alertType === 'WARNING') {
           color = alerts.warningColor
           title = '警告 WARNING'
           icon = '⚠️'
-          bg = 'rgba(245, 158, 11, 0.08)'
+          bg = '#fef7eb'
         } else if (alertType === 'IMPORTANT') {
           color = alerts.importantColor
           title = '重要 IMPORTANT'
           icon = '📌'
-          bg = 'rgba(139, 92, 246, 0.08)'
+          bg = '#f6f2fe'
         } else if (alertType === 'CAUTION') {
           color = alerts.cautionColor
           title = '注意 CAUTION'
           icon = '🚨'
-          bg = 'rgba(239, 68, 68, 0.08)'
+          bg = '#fef0f0'
         }
 
         // Render inner paragraph content to html
@@ -549,15 +550,15 @@ export async function renderMarkdown(
         const innerHtml = innerProcessor.stringify(innerProcessor.runSync(firstP as any))
 
         const alertCardHtml = `
-          <div class="m2h-alert-card m2h-alert-${alertType.toLowerCase()}" style="border-left: 4px solid ${color}; background-color: ${bg}; padding: 12px 16px; margin: 18px 0; border-radius: ${alerts.borderRadius};">
-            <div class="m2h-alert-title" style="display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 13px; color: ${color}; margin-bottom: 6px;">
-              <span>${icon}</span>
+          <section class="m2h-alert-card m2h-alert-${alertType.toLowerCase()}" style="border-left: 4px solid ${color}; background-color: ${bg}; padding: 12px 16px; margin: 18px 0; border-radius: ${alerts.borderRadius};">
+            <section class="m2h-alert-title" style="font-weight: bold; font-size: 13px; color: ${color}; margin-bottom: 6px; line-height: 1.6;">
+              <span style="margin-right: 6px;">${icon}</span>
               <span>${title}</span>
-            </div>
-            <div class="m2h-alert-body" style="font-size: 14px; line-height: 1.6; color: inherit;">
+            </section>
+            <section class="m2h-alert-body" style="font-size: 14px; line-height: 1.6; color: inherit;">
               ${innerHtml}
-            </div>
-          </div>
+            </section>
+          </section>
         `
 
         parent.children[index] = {
@@ -691,21 +692,21 @@ export async function renderMarkdown(
 
         const terminalHeaderHtml = theme.outputBlock.showTerminalHeader
           ? `
-          <div class="code-output-header">
-            <div class="code-output-title-wrap">
+          <section class="code-output-header">
+            <section class="code-output-title-wrap">
               <span class="code-output-icon"></span>
               <span class="code-output-title">${escapeHtml(title)}</span>
-            </div>
+            </section>
             <span class="code-output-tag">STDOUT</span>
-          </div>
+          </section>
           `
           : ''
 
         const cardHtml = `
-        <div class="code-output-card">
+        <section class="code-output-card">
           ${terminalHeaderHtml}
           <pre class="code-output-body"><code>${bodyHtml}</code></pre>
-        </div>
+        </section>
         `
 
         parent.children[index] = {
@@ -731,22 +732,22 @@ export async function renderMarkdown(
 
       const macDots = theme.code.block.showMacDots
         ? `
-        <div class="code-block-mac-header">
-          <div class="mac-dots">
+        <section class="code-block-mac-header">
+          <section class="mac-dots">
             <span class="mac-dot ${theme.code.block.macDotsStyle === 'colored' ? 'mac-dot-red' : 'mac-dot-mono'}"></span>
             <span class="mac-dot ${theme.code.block.macDotsStyle === 'colored' ? 'mac-dot-yellow' : 'mac-dot-mono'}"></span>
             <span class="mac-dot ${theme.code.block.macDotsStyle === 'colored' ? 'mac-dot-green' : 'mac-dot-mono'}"></span>
-          </div>
+          </section>
           <span class="code-lang-badge">${escapeHtml(lang || 'code')}</span>
-        </div>
+        </section>
         `
         : ''
 
       const wrappedHtml = `
-      <div class="code-block-wrapper">
+      <section class="code-block-wrapper">
         ${macDots}
         ${highlightedHtml}
-      </div>
+      </section>
       `
 
       parent.children[index] = {

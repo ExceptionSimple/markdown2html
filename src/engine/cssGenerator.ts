@@ -38,6 +38,26 @@ function generateHeadingCss(selector: string, h: HeadingStyle): string {
   return `${selector} {\n  ${rules.join('\n  ')}\n}`
 }
 
+// 微信编辑器只认十六进制实色，rgba() 背景会被整条过滤掉。
+// 这里把半透明叠加色预先合成到实色底上，保证粘贴后背景不丢。
+function mixHex(base: string, overlay: string, alpha: number): string {
+  const rgb = (c: string): number[] | null => {
+    const h = c.trim().replace('#', '')
+    const full = h.length === 3 ? h.replace(/./g, '$&$&') : h
+    if (!/^[0-9a-f]{6}$/i.test(full)) return null
+    return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16))
+  }
+  const b = rgb(base)
+  const o = rgb(overlay)
+  if (!b || !o) return base // 解析失败时原样返回，避免拼出非法值
+  return (
+    '#' +
+    b
+      .map((v, i) => Math.round(v + (o[i] - v) * alpha).toString(16).padStart(2, '0'))
+      .join('')
+  )
+}
+
 export function generateThemeCss(theme: ThemeConfig, scopeClass = '.m2h-content'): string {
   const { typography, headings, blockquote, table, list, inline, code, outputBlock } = theme
   const toc = theme.toc || {
@@ -86,6 +106,12 @@ export function generateThemeCss(theme: ThemeConfig, scopeClass = '.m2h-content'
     textColor: '#6b7280',
     customCss: ''
   }
+
+  // 预合成微信不支持的 rgba 半透明色（mac 顶栏及其分隔线、单色圆点、STDOUT 标签）
+  const codeHeaderBg = mixHex(code.block.backgroundColor, '#000000', 0.18)
+  const codeHeaderBorder = mixHex(codeHeaderBg, '#ffffff', 0.08)
+  const codeDotMono = mixHex(codeHeaderBg, '#ffffff', 0.25)
+  const outputTagBg = mixHex(outputBlock.headerBackground, '#ffffff', 0.1)
 
   return `
 /* === Markdown Typography & Layout === */
@@ -450,18 +476,17 @@ ${scopeClass} .code-block-wrapper {
   ${code.block.customCss || ''}
 }
 
+/* 微信编辑器不保留 display:flex，顶栏改用 inline-block + float 布局 */
 ${scopeClass} .code-block-mac-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: block;
   padding: 8px 14px;
-  background-color: rgba(0, 0, 0, 0.18);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: ${codeHeaderBg};
+  border-bottom: 1px solid ${codeHeaderBorder};
 }
 
 ${scopeClass} .mac-dots {
-  display: flex;
-  gap: 6px;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 ${scopeClass} .mac-dot {
@@ -469,14 +494,17 @@ ${scopeClass} .mac-dot {
   height: 10px;
   border-radius: 50%;
   display: inline-block;
+  margin-right: 6px;
 }
 
 ${scopeClass} .mac-dot-red { background-color: #ff5f56; }
 ${scopeClass} .mac-dot-yellow { background-color: #ffbd2e; }
 ${scopeClass} .mac-dot-green { background-color: #27c93f; }
-${scopeClass} .mac-dot-mono { background-color: rgba(255, 255, 255, 0.25); }
+${scopeClass} .mac-dot-mono { background-color: ${codeDotMono}; }
 
 ${scopeClass} .code-lang-badge {
+  float: right;
+  line-height: 10px;
   font-size: 11px;
   font-family: ${code.block.fontFamily};
   color: rgba(255, 255, 255, 0.5);
@@ -490,7 +518,9 @@ ${scopeClass} pre.shiki {
   line-height: ${code.block.lineHeight} !important;
   font-family: ${code.block.fontFamily} !important;
   overflow-x: auto !important;
-  background-color: ${code.block.backgroundColor} !important;
+  /* 背景交给外层 .code-block-wrapper：微信会丢弃 overflow:hidden，
+     若 pre 再自画一层方角背景，wrapper 的圆角就会被盖掉 */
+  background-color: transparent !important;
 }
 
 ${scopeClass} pre.shiki code {
@@ -520,10 +550,9 @@ ${scopeClass} .code-output-card {
   ${outputBlock.customCss || ''}
 }
 
+/* 微信编辑器不保留 display:flex，改用 block + inline-block + float */
 ${scopeClass} .code-output-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: block;
   background-color: ${outputBlock.headerBackground};
   color: ${outputBlock.headerColor};
   padding: 8px 14px;
@@ -534,15 +563,15 @@ ${scopeClass} .code-output-header {
 }
 
 ${scopeClass} .code-output-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 ${scopeClass} .code-output-icon {
   display: inline-block;
   width: 8px;
   height: 8px;
+  margin-right: 8px;
   border-radius: 50%;
   background-color: ${outputBlock.textColor};
   box-shadow: 0 0 6px ${outputBlock.textColor};
@@ -555,10 +584,11 @@ ${scopeClass} .code-output-title {
 }
 
 ${scopeClass} .code-output-tag {
+  float: right;
   font-size: 10px;
   padding: 2px 6px;
   border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: ${outputTagBg};
   color: ${outputBlock.headerColor};
   font-family: ${outputBlock.fontFamily};
 }
@@ -582,14 +612,14 @@ ${scopeClass} .code-output-prompt {
   margin-right: 6px;
 }
 
-/* === KaTeX Math Formulas === */
-${scopeClass} .katex-block-wrapper {
-  overflow-x: auto;
+/* === Math Formulas (MathJax SVG) === */
+/* 公式是自包含的 <svg>，图形靠 currentColor 跟随正文颜色，这里只负责排版间距 */
+${scopeClass} .m2h-math-block {
   margin: 18px 0;
   text-align: center;
 }
 
-${scopeClass} .katex-inline {
+${scopeClass} .m2h-math-inline {
   padding: 0 2px;
 }
 

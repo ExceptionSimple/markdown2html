@@ -107,7 +107,7 @@
 
         <div class="w-px h-4 bg-slate-800 mx-1"></div>
 
-        <!-- KaTeX Math Inline -->
+        <!-- Math Inline -->
         <button
           @click="insertSurround('$', '$')"
           class="px-1.5 py-1 rounded hover:bg-slate-800 text-sky-400 font-mono text-xs font-bold cursor-pointer"
@@ -115,7 +115,7 @@
         >
           $f(x)$
         </button>
-        <!-- KaTeX Math Block -->
+        <!-- Math Block -->
         <button
           @click="insertMathBlock"
           class="px-1.5 py-1 rounded hover:bg-slate-800 text-sky-400 font-mono text-xs font-bold cursor-pointer"

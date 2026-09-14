@@ -6,6 +6,9 @@ declare module '*.vue' {
   export default component
 }
 
+// MathJax 的浏览器自包含包没有类型声明，只用它的副作用（挂 window.MathJax）
+declare module 'mathjax/tex-svg.js'
+
 interface Window {
   electronAPI?: {
     saveFile: (options: {

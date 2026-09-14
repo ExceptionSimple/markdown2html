@@ -1,12 +1,10 @@
 import juice from 'juice'
 import type { ThemeConfig } from '../themes/types'
 import { generateThemeCss } from './cssGenerator'
-import { KATEX_CSS } from './katexCss'
 
 export function inlineHtmlWithTheme(html: string, theme: ThemeConfig): string {
   if (!html || !html.trim()) return ''
-  const themeCss = generateThemeCss(theme, '.m2h-content')
-  const combinedCss = `${KATEX_CSS}\n${themeCss}`
+  const combinedCss = generateThemeCss(theme, '.m2h-content')
 
   // Wrap within a section container for WeChat (avoid double-wrapping if already present)
   const isAlreadyWrapped = html.trim().startsWith('<section class="m2h-content"')
