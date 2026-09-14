@@ -690,11 +690,13 @@ export async function renderMarkdown(
           bodyHtml = escapeHtml(rawCode)
         }
 
+        // 图标用实心字符 ●，不能是空 <span> + 背景色：
+        // 与 mac 圆点同因，微信编辑器会把空元素整颗剪掉。
         const terminalHeaderHtml = theme.outputBlock.showTerminalHeader
           ? `
           <section class="code-output-header">
             <section class="code-output-title-wrap">
-              <span class="code-output-icon"></span>
+              <span class="code-output-icon">●</span>
               <span class="code-output-title">${escapeHtml(title)}</span>
             </section>
             <span class="code-output-tag">STDOUT</span>
@@ -730,13 +732,15 @@ export async function renderMarkdown(
         )
       }
 
+      // 圆点必须是「有内容的字符」，不能是空 <span> + 背景色：
+      // 实测微信编辑器会把空元素整颗剪掉，三个点粘贴后一个不剩。
       const macDots = theme.code.block.showMacDots
         ? `
         <section class="code-block-mac-header">
           <section class="mac-dots">
-            <span class="mac-dot ${theme.code.block.macDotsStyle === 'colored' ? 'mac-dot-red' : 'mac-dot-mono'}"></span>
-            <span class="mac-dot ${theme.code.block.macDotsStyle === 'colored' ? 'mac-dot-yellow' : 'mac-dot-mono'}"></span>
-            <span class="mac-dot ${theme.code.block.macDotsStyle === 'colored' ? 'mac-dot-green' : 'mac-dot-mono'}"></span>
+            <span class="mac-dot ${theme.code.block.macDotsStyle === 'colored' ? 'mac-dot-red' : 'mac-dot-mono'}">●</span>
+            <span class="mac-dot ${theme.code.block.macDotsStyle === 'colored' ? 'mac-dot-yellow' : 'mac-dot-mono'}">●</span>
+            <span class="mac-dot ${theme.code.block.macDotsStyle === 'colored' ? 'mac-dot-green' : 'mac-dot-mono'}">●</span>
           </section>
           <span class="code-lang-badge">${escapeHtml(lang || 'code')}</span>
         </section>

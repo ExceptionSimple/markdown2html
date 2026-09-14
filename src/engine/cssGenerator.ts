@@ -489,18 +489,20 @@ ${scopeClass} .mac-dots {
   vertical-align: middle;
 }
 
+/* 圆点由实心字符 ● 画出，不再用「空元素 + 背景色」。
+   微信编辑器会剪掉空元素（三个点整颗消失）；而 width / height / 背景色 /
+   border-radius 都在它的白名单之外，堆五个样式去撑一个装饰性圆点不可靠。
+   字符方案只依赖 color 与 font-size，二者都是实测能存活的属性。 */
 ${scopeClass} .mac-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 6px;
+  font-size: 16px;
+  line-height: 1;
+  margin-right: 4px;
 }
 
-${scopeClass} .mac-dot-red { background-color: #ff5f56; }
-${scopeClass} .mac-dot-yellow { background-color: #ffbd2e; }
-${scopeClass} .mac-dot-green { background-color: #27c93f; }
-${scopeClass} .mac-dot-mono { background-color: ${codeDotMono}; }
+${scopeClass} .mac-dot-red { color: #ff5f56; }
+${scopeClass} .mac-dot-yellow { color: #ffbd2e; }
+${scopeClass} .mac-dot-green { color: #27c93f; }
+${scopeClass} .mac-dot-mono { color: ${codeDotMono}; }
 
 ${scopeClass} .code-lang-badge {
   float: right;
@@ -567,14 +569,14 @@ ${scopeClass} .code-output-title-wrap {
   vertical-align: middle;
 }
 
+/* 与 mac 圆点同因：空元素被微信剪掉，图标改用实心字符 ● 画出。
+   代价是丢掉原来的 box-shadow 光晕——它本就不在微信白名单里，粘贴后也留不下。 */
 ${scopeClass} .code-output-icon {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 8px;
-  border-radius: 50%;
-  background-color: ${outputBlock.textColor};
-  box-shadow: 0 0 6px ${outputBlock.textColor};
+  font-size: 15px;
+  line-height: 1;
+  vertical-align: middle;
+  margin-right: 7px;
+  color: ${outputBlock.textColor};
 }
 
 ${scopeClass} .code-output-title {
