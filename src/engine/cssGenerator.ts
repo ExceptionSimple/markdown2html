@@ -648,13 +648,11 @@ ${scopeClass} .m2h-toc-list li {
   list-style-type: none !important;
 }
 
-${scopeClass} .m2h-toc-link {
-  transition: opacity 0.15s;
-}
-
-${scopeClass} .m2h-toc-link:hover {
-  opacity: 0.75;
-}
+/* 目录项不再是链接：微信正文不支持页内锚点跳转——它只认自家编辑器的标题样式，
+   而我们把 h1~h6 降级成了 <section role="heading">，微信那边压根看不到标题。
+   带 href 的目录项粘过去只会变成一个带域名、永远点不动的链接（域名由接收方
+   解析相对 URL 时补全），所以这里直接不给 href。详情见 walkthrough 第 27 节。
+   类名保留 m2h-toc-link 不重命名：用户的自定义 CSS 可能已经引用它。 */
 
 /* === Alerts / Callouts === */
 ${scopeClass} .m2h-alert-card {

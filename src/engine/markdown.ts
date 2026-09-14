@@ -383,9 +383,9 @@ export async function renderMarkdown(
       const displayText = `${prefix}${escapeHtml(cleanText)}`
       return `
         <li style="margin-left: ${indentPx}px; margin-bottom: 6px; list-style: none !important; list-style-type: none !important;">
-          <a href="#${h.id}" class="m2h-toc-link" style="color: ${toc.textColor}; text-decoration: none; display: flex; align-items: center;">
+          <span class="m2h-toc-link" style="color: ${toc.textColor}; text-decoration: none; display: flex; align-items: center;">
             <span style="border-bottom: 1px dashed rgba(0,0,0,0.15);">${displayText}</span>
-          </a>
+          </span>
         </li>
       `
     }).join('\n')
