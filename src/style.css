@@ -1,0 +1,86 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+/* Base resets */
+html, body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
+#app {
+  width: 100%;
+  min-height: 100%;
+}
+
+/* Ensure Markdown article body lists render standard bullet points despite Tailwind preflight */
+#m2h-preview-container .m2h-content ul,
+.m2h-article-body ul {
+  list-style: disc;
+  list-style-type: disc;
+}
+
+#m2h-preview-container .m2h-content ol,
+.m2h-article-body ol {
+  list-style: decimal;
+  list-style-type: decimal;
+}
+
+#m2h-preview-container .m2h-content ul ul,
+.m2h-article-body ul ul {
+  list-style: circle;
+  list-style-type: circle;
+}
+
+#m2h-preview-container .m2h-content ul ul ul,
+.m2h-article-body ul ul ul {
+  list-style: square;
+  list-style-type: square;
+}
+
+#m2h-preview-container .m2h-content ol ol,
+.m2h-article-body ol ol {
+  list-style: lower-alpha;
+  list-style-type: lower-alpha;
+}
+
+#m2h-preview-container .m2h-content ol ol ol,
+.m2h-article-body ol ol ol {
+  list-style: lower-roman;
+  list-style-type: lower-roman;
+}
+
+#m2h-preview-container .m2h-content .m2h-toc-list,
+#m2h-preview-container .m2h-content .m2h-toc-list li,
+#m2h-preview-container .m2h-content .m2h-footnotes-list,
+#m2h-preview-container .m2h-content .m2h-footnotes-list li,
+#m2h-preview-container .m2h-content li.task-list-item,
+.m2h-article-body .m2h-toc-list,
+.m2h-article-body .m2h-toc-list li,
+.m2h-article-body .m2h-footnotes-list,
+.m2h-article-body .m2h-footnotes-list li,
+.m2h-article-body li.task-list-item {
+  list-style: none !important;
+  list-style-type: none !important;
+}
